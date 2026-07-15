@@ -8,7 +8,8 @@
     "serve": "npx serve out",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "loadtest": "vitest run loadtest"
   },
   "dependencies": {
     "@primer/octicons-react": "^19.24.1",

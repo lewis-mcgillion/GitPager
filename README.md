@@ -106,6 +106,19 @@ A workflow (`.github/workflows/pages.yml`) builds the static export and deploys 
 | `npm run serve` | Serve the built `out/` locally |
 | `npm run lint` | ESLint |
 | `npm test` | Vitest unit tests |
+| `npm run loadtest` | Performance test: drives every page's data path against a large **mock** PagerDuty account and asserts each page loads within a small request budget |
+
+### Performance / load testing
+
+GitPager calls the PagerDuty REST API directly from the browser, so a page's
+load time is dominated by **how many API round-trips** it makes. `npm run
+loadtest` builds a realistically large mock account (hundreds of users, teams,
+services and policies; thousands of incidents and on-call rows) and exercises
+the exact fetch logic behind each page — **without touching a real PagerDuty
+account** — printing a per-page request budget report. Every page stays at
+0–2 requests; the test fails if any page regresses past 3. It also records the
+before/after of the user-scoping work (unscoped on-call list = 50 requests →
+scoped = 1).
 
 ## Security notes
 
