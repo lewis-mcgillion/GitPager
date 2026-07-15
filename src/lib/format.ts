@@ -1,7 +1,16 @@
 // Small date/time formatting helpers used across the UI.
 
-export function formatDateTime(d: Date | string): string {
+/** Coerce input to a valid Date, or null for nullish/unparseable values so
+ *  callers render a placeholder instead of "Invalid Date"/"NaN". */
+function toDate(d: Date | string | null | undefined): Date | null {
+  if (d == null) return null;
   const date = typeof d === "string" ? new Date(d) : d;
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function formatDateTime(d: Date | string | null | undefined): string {
+  const date = toDate(d);
+  if (!date) return "—";
   return date.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
@@ -10,8 +19,9 @@ export function formatDateTime(d: Date | string): string {
   });
 }
 
-export function formatDate(d: Date | string): string {
-  const date = typeof d === "string" ? new Date(d) : d;
+export function formatDate(d: Date | string | null | undefined): string {
+  const date = toDate(d);
+  if (!date) return "—";
   return date.toLocaleDateString(undefined, {
     weekday: "short",
     month: "short",
@@ -19,13 +29,15 @@ export function formatDate(d: Date | string): string {
   });
 }
 
-export function formatTime(d: Date | string): string {
-  const date = typeof d === "string" ? new Date(d) : d;
+export function formatTime(d: Date | string | null | undefined): string {
+  const date = toDate(d);
+  if (!date) return "—";
   return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
-export function formatRelative(d: Date | string): string {
-  const date = typeof d === "string" ? new Date(d) : d;
+export function formatRelative(d: Date | string | null | undefined): string {
+  const date = toDate(d);
+  if (!date) return "—";
   const diffMs = Date.now() - date.getTime();
   const future = diffMs < 0;
   const abs = Math.abs(diffMs);
@@ -45,6 +57,7 @@ export function formatRelative(d: Date | string): string {
 
 /** Human-friendly duration for a number of seconds (e.g. rotation length). */
 export function formatDurationSeconds(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0 min";
   if (seconds % (7 * 86400) === 0) {
     const w = seconds / (7 * 86400);
     return w === 1 ? "1 week" : `${w} weeks`;

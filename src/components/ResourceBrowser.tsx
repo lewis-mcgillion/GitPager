@@ -60,6 +60,10 @@ export function ResourceBrowser({
   const [term, setTerm] = useState("");
   const [offset, setOffset] = useState(0);
   const debounced = useDebouncedValue(term.trim(), 300);
+  // While the debounce is still settling (user just typed), the fetch for the
+  // new term hasn't started yet. Treat that as loading so we show a spinner
+  // instead of stale results from the previous query.
+  const pending = term.trim() !== debounced;
 
   const { data, loading, error, reload } = useAsync<PdPage<BrowseRow>>(
     () => fetchPage(debounced, offset),
@@ -92,7 +96,7 @@ export function ResourceBrowser({
         {!debounced && defaultHint ? <div style={{ marginTop: 6, ...mutedSmall }}>{defaultHint}</div> : null}
       </div>
 
-      {loading ? (
+      {loading || pending ? (
         <Loading />
       ) : error ? (
         <ErrorState message={error} onRetry={reload} />

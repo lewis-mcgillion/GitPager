@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signInWithToken } from "@/lib/pdAuth";
-import { pdList, createOverride, deleteOverride, manageIncident, listIncidents, searchEscalationPolicies, searchServices, pdFetchPage, listIncidentsPage, listTeamMembers } from "@/lib/pdApi";
+import { pdList, createOverride, deleteOverride, manageIncident, listIncidents, searchEscalationPolicies, searchServices, searchUsers, pdFetchPage, listIncidentsPage, listTeamMembers } from "@/lib/pdApi";
 
 interface MockCall {
   url: string;
@@ -158,6 +158,35 @@ describe("searchServices scoping", () => {
     const url = String(fetchMock.mock.calls[0][0]);
     expect(url).toContain("query=api");
     expect(url).not.toContain("team_ids");
+  });
+});
+
+describe("scoped search short-circuits when there is nothing to scope to", () => {
+  it("returns an empty page without fetching when a user has no teams (services)", async () => {
+    const page = await searchServices({ teamIds: [], offset: 0 });
+    expect(page).toEqual({ items: [], more: false, offset: 0, limit: 25 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty page without fetching when a user has no teams (people)", async () => {
+    const page = await searchUsers({ teamIds: [], offset: 0 });
+    expect(page).toEqual({ items: [], more: false, offset: 0, limit: 25 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty page without fetching when the user is unknown (escalation policies)", async () => {
+    const noIds = await searchEscalationPolicies({ userIds: [], offset: 0 });
+    expect(noIds).toEqual({ items: [], more: false, offset: 0, limit: 25 });
+    const undefinedIds = await searchEscalationPolicies({ offset: 0 });
+    expect(undefinedIds).toEqual({ items: [], more: false, offset: 0, limit: 25 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still searches account-wide when a query is provided but no scope ids", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ users: [], more: false }));
+    await searchUsers({ query: "ada", teamIds: [], offset: 0 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("query=ada");
   });
 });
 

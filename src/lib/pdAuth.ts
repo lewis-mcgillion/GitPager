@@ -228,7 +228,12 @@ export async function completeLogin(search: string): Promise<{ returnTo: string 
 
   const raw = window.sessionStorage.getItem(PKCE_KEY);
   if (!raw) throw new Error("Missing PKCE verifier — please start sign-in again.");
-  const pkce = JSON.parse(raw) as { verifier: string; state: string; returnTo: string };
+  let pkce: { verifier: string; state: string; returnTo: string };
+  try {
+    pkce = JSON.parse(raw) as { verifier: string; state: string; returnTo: string };
+  } catch {
+    throw new Error("Corrupt PKCE data — please start sign-in again.");
+  }
   if (pkce.state !== state) throw new Error("State mismatch — possible CSRF, aborting.");
 
   const body = new URLSearchParams({

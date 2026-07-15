@@ -46,7 +46,7 @@ export function OnCallTimeline({
   }
 
   const nowMs = new Date(now).getTime();
-  const showNow = nowMs >= fromMs && nowMs <= toMs;
+  const showNow = nowMs >= fromMs && nowMs < toMs;
 
   return (
     <div>

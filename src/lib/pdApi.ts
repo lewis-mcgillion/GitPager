@@ -157,6 +157,13 @@ export async function pdFetchPage<T>(
   return { items: (data[key] as T[]) ?? [], more: Boolean(data.more), offset, limit };
 }
 
+/** An empty page — returned when a user-scoped browse has nothing to scope to
+ *  (e.g. a user on no teams). We prompt to search instead of falling back to an
+ *  unscoped account-wide fetch. */
+function emptyPage<T>(offset = 0, limit = 25): PdPage<T> {
+  return { items: [], more: false, offset, limit };
+}
+
 // ---------------------------------------------------------------------------
 // Types (only the fields GitPager uses)
 // ---------------------------------------------------------------------------
@@ -455,6 +462,7 @@ export function searchEscalationPolicies(p: {
   const q: Query = {};
   if (p.query) q.query = p.query;
   else if (p.userIds?.length) q["user_ids[]"] = p.userIds;
+  else return Promise.resolve(emptyPage<PdEscalationPolicy>(p.offset ?? 0, p.limit ?? 25));
   return pdFetchPage<PdEscalationPolicy>("/escalation_policies", "escalation_policies", q, p.offset ?? 0, p.limit ?? 25);
 }
 
@@ -473,6 +481,7 @@ export function searchServices(p: {
   const q: Query = { "include[]": ["escalation_policies", "teams"] };
   if (p.query) q.query = p.query;
   else if (p.teamIds?.length) q["team_ids[]"] = p.teamIds;
+  else return Promise.resolve(emptyPage<PdService>(p.offset ?? 0, p.limit ?? 25));
   return pdFetchPage<PdService>("/services", "services", q, p.offset ?? 0, p.limit ?? 25);
 }
 
@@ -491,6 +500,7 @@ export function searchUsers(p: {
   const q: Query = { "include[]": ["teams"] };
   if (p.query) q.query = p.query;
   else if (p.teamIds?.length) q["team_ids[]"] = p.teamIds;
+  else return Promise.resolve(emptyPage<PdUser>(p.offset ?? 0, p.limit ?? 25));
   return pdFetchPage<PdUser>("/users", "users", q, p.offset ?? 0, p.limit ?? 25);
 }
 
