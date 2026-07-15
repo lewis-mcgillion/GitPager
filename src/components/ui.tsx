@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Avatar, Text } from "@primer/react";
+import { Avatar, Text, Spinner, Button } from "@primer/react";
 
 const border = "1px solid var(--borderColor-default, #d0d7de)";
 
@@ -135,6 +135,45 @@ export function EmptyState({
       {icon ? <div style={{ marginBottom: 8 }}>{icon}</div> : null}
       <div style={{ fontWeight: 600, marginBottom: 4 }}>{title}</div>
       {description ? <div style={{ fontSize: 13 }}>{description}</div> : null}
+    </div>
+  );
+}
+
+export function Loading({ label = "Loading…" }: { label?: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 10,
+        padding: "48px 20px",
+        color: "var(--fgColor-muted, #656d76)",
+      }}
+    >
+      <Spinner size="small" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div style={{ padding: "32px 20px", textAlign: "center" }}>
+      <div style={{ color: "var(--fgColor-danger, #cf222e)", fontWeight: 600, marginBottom: 6 }}>
+        Something went wrong
+      </div>
+      <div
+        style={{
+          color: "var(--fgColor-muted, #656d76)",
+          fontSize: 13,
+          marginBottom: 12,
+          wordBreak: "break-word",
+        }}
+      >
+        {message}
+      </div>
+      {onRetry ? <Button onClick={onRetry}>Retry</Button> : null}
     </div>
   );
 }

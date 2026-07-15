@@ -1,199 +1,118 @@
 # GitPager
 
-A GitHub‑flavoured, internal replacement for PagerDuty — focused on the thing
-PagerDuty makes harder than it should be: **coordinating who is on call**.
+A GitHub‑flavoured, nicer‑to‑use front end for **PagerDuty on‑call coordination**.
+PagerDuty's scheduling UI is clunky; GitPager rebuilds the parts your team touches
+most — *who's on call now*, the **rotation timeline**, and **one‑click overrides
+("cover a shift")** — with a clean [Primer](https://primer.style/) interface.
 
-GitPager rebuilds the on‑call **configuration & visualization** experience with a
-clean [Primer](https://primer.style/) UI, so it's obvious **who is on call, when,
-and why** — and covering a shift takes a couple of clicks, not a scavenger hunt.
+GitPager is a **static single‑page app**. There is **no backend**: it talks to the
+**PagerDuty REST API directly from your browser** (PagerDuty serves permissive CORS),
+authenticating with **OAuth 2.0 Authorization Code + PKCE** (a public client — no
+secret). That's what lets it be hosted for free on **GitHub Pages**.
 
-> **No real paging.** GitPager is about *organising* on‑call. Notifications are
-> simulated in‑app (a notification centre + incident timeline) behind a pluggable
-> notifier, so real channels can be wired in later without touching the UI.
+> It does not page anyone. It's a better control panel for the on‑call config that
+> already lives in your PagerDuty account.
 
----
+## Features
 
-## Highlights
+- **Dashboard** — who's on call right now across every schedule, plus open incidents.
+- **Schedules** — a Gantt‑style timeline of the *rendered* rotation (PagerDuty does
+  the rotation math), a colour legend, and **overrides**: cover a shift in two clicks,
+  or remove one.
+- **Incidents** — filter by status; open an incident to see its timeline and
+  **acknowledge / resolve** it.
+- **Escalation policies**, **Services**, **Teams**, **People** — clean read views with
+  cross‑links (service → policy → schedule → on‑call person).
+- Full **light / dark** mode via Primer.
 
-- 🗓️ **Who's on call right now** — at a glance, across every team and schedule.
-- 📊 **Visual schedule timeline** — a Gantt‑style view of the *resolved* rotation
-  (layers + overrides), colour‑coded per person, with a live "now" marker.
-- 🔁 **Effortless overrides** — "cover for me" in two clicks; the timeline updates
-  immediately.
-- 🪜 **Escalation‑policy builder** — ordered levels, reorder up/down, per‑level
-  delays, and user *or* schedule targets (schedules resolve to the current on‑call).
-- 🚨 **Incidents (secondary)** — trigger / acknowledge / resolve / reassign /
-  escalate, each with a full timeline.
-- 🔌 **Events API** — a PagerDuty Events‑v2‑style endpoint so monitoring tools can
-  trigger incidents programmatically.
-- 🌗 **Light & dark** — full Primer theming with no flash on load.
+## How authentication works
 
-## Tech stack
+- **PagerDuty OAuth (PKCE)** — the recommended path. A *Public Client* app has **no
+  secret**, so the whole flow runs safely in the browser. The access token is kept in
+  `localStorage` (the standard SPA trade‑off for an internal tool with no server).
+- **REST API token** — a fallback for quick local use. Paste a PagerDuty user/general
+  access token on the sign‑in screen. It's stored only in your browser.
 
-| Area | Choice |
-| --- | --- |
-| Framework | [Next.js 16](https://nextjs.org/) (App Router, Turbopack) + React 19 |
-| UI | [Primer React](https://primer.style/react) v38 + [Octicons](https://primer.style/octicons) |
-| Data | [Prisma ORM](https://www.prisma.io/) + SQLite |
-| Auth | OIDC Authorization Code flow (PKCE) + a dev‑login fallback |
-| Tests | [Vitest](https://vitest.dev/) |
+On a `401` the session is cleared and you're returned to sign‑in. There's no refresh
+flow in v1 — you simply sign in again.
 
----
-
-## Getting started
-
-Requires **Node.js 20+** (developed on Node 24).
+## Quick start (local)
 
 ```bash
-# 1. Install dependencies (runs `prisma generate` automatically)
 npm install
-
-# 2. Create your local env file (secrets live here — it is gitignored)
-cp .env.example .env.local
-#   then edit .env.local: set a SESSION_SECRET (openssl rand -hex 32).
-#   AUTH_MODE defaults to "dev", so no external IdP is needed to start.
-
-# 3. Create the database and load demo data
-npm run db:migrate      # apply the Prisma migration
-npm run db:seed         # seed a realistic demo org (teams, schedules, incidents)
-
-# 4. Run it
-npm run dev             # http://localhost:3000
+cp .env.example .env.local     # then edit .env.local (see below)
+npm run dev                    # http://localhost:3000
 ```
 
-On first load you'll hit the **sign‑in** page. In dev mode, pick any seeded user
-(e.g. **Lewis McGillion**, an admin) to log straight in.
+You can sign in immediately using a **REST API token** (no setup). To use OAuth
+locally, create a PKCE app (below) and set `NEXT_PUBLIC_PAGERDUTY_CLIENT_ID`.
 
----
+## Create the PagerDuty PKCE app (one‑time)
 
-## Authentication
+OAuth sign‑in needs a **Public Client** app registered in *your* PagerDuty account:
 
-GitPager supports two modes, controlled by `AUTH_MODE` in `.env.local`:
+1. PagerDuty → **Integrations → App Registration → New App**.
+2. Name it "GitPager", choose **OAuth 2.0** as the functionality, then **Public Client**
+   (PKCE, **no client secret**).
+3. Add these **Redirect URLs** (the trailing slash matters):
+   - `http://localhost:3000/callback/` — local dev
+   - `https://<your-user>.github.io/<repo>/callback/` — GitHub Pages
+     (for this repo: `https://lewis-mcgillion.github.io/GitPager/callback/`)
+4. Select scopes matching `NEXT_PUBLIC_PAGERDUTY_SCOPES` (defaults cover read across the
+   app plus `schedules.write` and `incidents.write`).
+5. Copy the **Client ID** into `NEXT_PUBLIC_PAGERDUTY_CLIENT_ID`. There is no secret to copy.
 
-### `dev` (default)
-A seeded‑user picker — no external identity provider required. Perfect for local
-development and demos. Clearly labelled as dev‑only in the UI.
+## Configuration
 
-### `oidc`
-A standard OAuth2 / OIDC Authorization Code flow (with `state` + PKCE):
+All build‑time config is **public** (`NEXT_PUBLIC_*`). See `.env.example`.
 
-1. `/api/auth/login` → redirect to `OIDC_AUTHORIZE_URL`.
-2. `/api/auth/callback` → exchange the code at `OIDC_TOKEN_URL`, fetch
-   `OIDC_USERINFO_URL`, upsert the `User`, set a signed **httpOnly** session cookie.
-3. `/api/auth/logout` → clear the session.
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `NEXT_PUBLIC_PAGERDUTY_CLIENT_ID` | Public Client (PKCE) client id. Blank hides OAuth and shows token sign‑in. | `""` |
+| `NEXT_PUBLIC_PAGERDUTY_REGION` | `eu` (`api.eu.pagerduty.com`) or `us` (`api.pagerduty.com`). | `eu` |
+| `NEXT_PUBLIC_BASE_PATH` | Path the app is served under, e.g. `/GitPager` on Pages. | `""` |
+| `NEXT_PUBLIC_PAGERDUTY_SCOPES` | Space‑delimited OAuth scopes (subset of the app's grants). | see `.env.example` |
 
-Configure it entirely via env vars (see `.env.example`). The defaults point at an
-Okta OIDC application; supply your `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` in
-`.env.local` and set `AUTH_MODE="oidc"`.
+## Deploy to GitHub Pages
 
-> 🔐 **Secret safety.** This is a public repo. Real secrets (`OIDC_CLIENT_SECRET`,
-> `SESSION_SECRET`) belong **only** in `.env.local`, which is gitignored. The
-> committed `.env` holds nothing but the non‑secret SQLite `DATABASE_URL` that the
-> Prisma CLI needs. `.env.example` contains placeholders only.
+A workflow (`.github/workflows/pages.yml`) builds the static export and deploys it.
 
----
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+2. **Settings → Secrets and variables → Actions → Variables** — add repository
+   *Variables* (not secrets; these are public):
+   - `PAGERDUTY_CLIENT_ID` — your PKCE client id.
+   - `PAGERDUTY_REGION` — `eu` or `us` (optional; defaults to `eu`).
+3. Register the Pages **redirect URL** on your PagerDuty app (step 3 above).
+4. Push to `main`. The workflow sets `NEXT_PUBLIC_BASE_PATH=/<repo>` automatically,
+   builds, and publishes. Your site: `https://<user>.github.io/<repo>/`.
 
-## Events API
-
-Monitoring tools can trigger incidents without a user session, authorised by a
-service's **integration key** (its `routing_key`). Copy a key from any
-**Service → detail** page.
-
-```bash
-# Trigger an incident
-curl -X POST http://localhost:3000/api/events \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "routing_key": "<integration-key-from-a-service-page>",
-    "event_action": "trigger",
-    "dedup_key": "high-5xx-api-gateway",
-    "payload": {
-      "summary": "Elevated 5xx errors on API Gateway",
-      "severity": "critical",
-      "source": "prometheus"
-    }
-  }'
-```
-
-The response returns a `dedup_key`. Re‑use it to `acknowledge` or `resolve` the
-same incident:
-
-```bash
-curl -X POST http://localhost:3000/api/events \
-  -H 'Content-Type: application/json' \
-  -d '{ "routing_key": "<key>", "event_action": "resolve", "dedup_key": "high-5xx-api-gateway" }'
-```
-
-Triggering deduplicates on `dedup_key`, assigns the incident based on the
-service's escalation policy (resolving schedules to the current on‑call user), and
-writes a simulated notification + timeline entry.
-
----
-
-## How on‑call resolution works
-
-The correctness‑critical logic is pure and unit‑tested:
-
-- **On‑call resolver** (`src/lib/oncall.ts`) — evaluates a schedule's rotation
-  layers (turn length, handoff time, start anchor, ordered users) for a given
-  instant, then applies any **overrides** on top to produce the effective on‑call
-  user. `whoIsOnCall(schedule, at)` and `buildScheduleSegments(schedule, from, to)`
-  power the dashboard and the timeline.
-- **Escalation resolver** (`src/lib/escalation.ts`) — resolves a policy level's
-  targets, turning a schedule target into its current on‑call user.
-
-Run the tests:
-
-```bash
-npm run test
-```
-
----
-
-## Project scripts
+## Scripts
 
 | Script | What it does |
 | --- | --- |
-| `npm run dev` | Start the dev server (Turbopack) on `:3000` |
-| `npm run build` | `prisma generate` + production build |
-| `npm start` | Serve the production build |
+| `npm run dev` | Next dev server on :3000 |
+| `npm run build` | Static export to `out/` |
+| `npm run serve` | Serve the built `out/` locally |
 | `npm run lint` | ESLint |
-| `npm run test` | Vitest (unit tests) |
-| `npm run db:migrate` | Apply Prisma migrations |
-| `npm run db:seed` | Seed the demo org |
-| `npm run db:reset` | Drop, re‑migrate and re‑seed the database |
+| `npm test` | Vitest unit tests |
 
----
+## Security notes
 
-## Project structure
+- This repo is **public**. Only non‑secret `NEXT_PUBLIC_*` values are ever built in.
+- A PKCE **public client has no secret** — nothing sensitive is embedded in the site.
+- A PagerDuty **confidential** app *does* have a secret; it **cannot** be used from a
+  browser and must **never** be committed. Keep any such secret out of the tree
+  (only in gitignored `.env.local`, and don't prefix it with `NEXT_PUBLIC_`).
+- Tokens live in `localStorage`, scoped to your browser/device.
 
-```
-prisma/
-  schema.prisma        # 14 models (users, teams, schedules, layers, overrides,
-  seed.ts              #   escalation policies/rules/targets, services, incidents…)
-src/
-  app/
-    (app)/             # authenticated app: dashboard, schedules, escalation-
-                       #   policies, services, incidents, teams, people, notifications
-    api/
-      auth/            # OIDC login/callback/logout + dev-login
-      events/          # PagerDuty-style Events API
-    signin/            # sign-in page
-  components/          # Primer building blocks (AppShell, timelines, labels, …)
-  lib/                 # on-call & escalation resolvers, incident lifecycle, auth,
-                       #   Prisma client, formatting helpers
-__tests__/             # Vitest unit tests for the resolvers
-```
+## Tech stack
 
-## Demo data
+Next.js 16 (App Router, `output: 'export'`) · React 19 · TypeScript ·
+[@primer/react](https://primer.style/) + Octicons · Vitest. No database, no server.
 
-`npm run db:seed` creates a realistic org: eight users, three teams (Platform,
-Payments, SRE), services with integration keys, weekly and daily rotation
-schedules (including a "cover for me" override), escalation policies, and a few
-sample incidents — so the app is useful the moment it boots.
+## Scope (v1)
 
----
-
-## License
-
-Internal project. Not for external distribution.
+Read + the writes that matter for coordination (**overrides**, **incident ack/resolve**).
+Editing schedules/rotations and escalation policies is done in PagerDuty itself and
+deep‑linked via "Open in PagerDuty". No real notification delivery — GitPager configures
+and visualises on‑call; PagerDuty still does the paging.

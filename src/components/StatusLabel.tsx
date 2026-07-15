@@ -18,6 +18,8 @@ const URGENCY: Record<string, { variant: Variant; text: string }> = {
 
 const SERVICE_STATUS: Record<string, { variant: Variant; text: string }> = {
   active: { variant: "success", text: "Active" },
+  warning: { variant: "attention", text: "Warning" },
+  critical: { variant: "danger", text: "Critical" },
   maintenance: { variant: "attention", text: "Maintenance" },
   disabled: { variant: "secondary", text: "Disabled" },
 };

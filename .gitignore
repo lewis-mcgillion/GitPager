@@ -20,28 +20,19 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# env files — real secrets live ONLY in .env*.local (gitignored, NEVER committed).
-# The committed .env holds ONLY the non-secret local SQLite DATABASE_URL that the
-# Prisma CLI needs. Do NOT put secrets (OIDC client secret, SESSION_SECRET) in .env.
+# env files — GitPager is a public repo. Only NON-secret NEXT_PUBLIC_* config is
+# ever needed at build time, and it belongs in .env.local (gitignored) or CI vars.
+# NEVER commit a real secret. The confidential PagerDuty client secret must stay
+# out of the tree entirely — a static site cannot use it anyway.
+.env
 .env*.local
-
-# SQLite / Prisma database files
-*.db
-*.db-journal
-*.sqlite
-*.sqlite3
-prisma/dev.db*
-prisma/*.db
-prisma/migrations/dev.db*
-
-# generated Prisma client
-/src/generated
 
 # testing
 /coverage
 
 # typescript
 *.tsbuildinfo
+tsconfig.tsbuildinfo
 
 # IDE
 .idea

@@ -1,33 +1,43 @@
-import { db } from "@/lib/db";
-import { getOnCallNow } from "@/lib/schedules";
-import { PeopleView } from "./PeopleView";
+"use client";
 
-export default async function PeoplePage() {
-  const [users, onCallNow] = await Promise.all([
-    db.user.findMany({
-      orderBy: { name: "asc" },
-      include: { _count: { select: { memberships: true } } },
-    }),
-    getOnCallNow(),
-  ]);
+import { useAsync } from "@/lib/useAsync";
+import { listUsers, type PdUser } from "@/lib/pdApi";
+import { PageHeader } from "@/components/PageHeader";
+import { Card, CardRow, UserInline, EmptyState, Loading, ErrorState, CardLink } from "@/components/ui";
+import { PersonIcon } from "@primer/octicons-react";
 
-  const onCallIds = new Set(onCallNow.map((o) => o.user?.id).filter(Boolean) as string[]);
+export default function PeoplePage() {
+  const { data, loading, error, reload } = useAsync<PdUser[]>(() => listUsers(), []);
 
   return (
-    <PeopleView
-      people={users.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        avatarUrl: u.avatarUrl,
-        githubLogin: u.githubLogin,
-        role: u.role,
-        timeZone: u.timeZone,
-        teamCount: u._count.memberships,
-        onCall: onCallIds.has(u.id),
-      }))}
-    />
+    <div>
+      <PageHeader title="People" description="Everyone in your PagerDuty account." />
+
+      {loading ? (
+        <Loading />
+      ) : error ? (
+        <ErrorState message={error} onRetry={reload} />
+      ) : (data?.length ?? 0) === 0 ? (
+        <Card>
+          <EmptyState icon={<PersonIcon size={24} />} title="No people" />
+        </Card>
+      ) : (
+        <Card>
+          {data!.map((u, i) => (
+            <CardRow key={u.id} style={i === 0 ? { borderTop: "none" } : undefined}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <CardLink href={`/people/detail/?id=${u.id}`}>
+                  <UserInline user={{ name: u.name, avatarUrl: u.avatar_url }} />
+                </CardLink>
+                <div style={{ fontSize: 12, color: "var(--fgColor-muted, #656d76)", marginLeft: 28 }}>{u.email}</div>
+              </div>
+              <div style={{ flexShrink: 0, fontSize: 12, color: "var(--fgColor-muted, #656d76)" }}>
+                {u.job_title || u.role || ""}
+              </div>
+            </CardRow>
+          ))}
+        </Card>
+      )}
+    </div>
   );
 }
-
-export const dynamic = "force-dynamic";

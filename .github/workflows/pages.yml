@@ -1,0 +1,65 @@
+# Build GitPager as a static site and deploy it to GitHub Pages.
+#
+# GitPager is a static export (see next.config.ts) — there is no server. The
+# only build-time configuration is the PUBLIC PagerDuty PKCE client id and the
+# region, supplied via repository *Variables* (Settings → Secrets and variables
+# → Actions → Variables). They are public by design; do NOT use secrets and do
+# NOT put a client secret anywhere.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-progress production deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static export
+        env:
+          # Serve under /<repo> for a project Pages site (e.g. /GitPager).
+          NEXT_PUBLIC_BASE_PATH: "/${{ github.event.repository.name }}"
+          # Public PKCE client id + region from repo Variables (not secrets).
+          NEXT_PUBLIC_PAGERDUTY_CLIENT_ID: ${{ vars.PAGERDUTY_CLIENT_ID }}
+          NEXT_PUBLIC_PAGERDUTY_REGION: ${{ vars.PAGERDUTY_REGION || 'eu' }}
+        run: npm run build
+
+      - name: Add .nojekyll so _next assets are served
+        run: touch out/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

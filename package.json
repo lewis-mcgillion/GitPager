@@ -4,25 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "next start",
+    "build": "next build",
+    "serve": "npx serve out",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset --force",
-    "db:seed": "tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@primer/octicons-react": "^19.24.1",
     "@primer/react": "^38.19.0",
-    "@prisma/client": "^6.2.1",
-    "jose": "^5.9.6",
     "next": "16.2.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -37,8 +27,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "jsdom": "^29.0.2",
-    "prisma": "^6.2.1",
-    "tsx": "^4.19.2",
     "typescript": "^5",
     "vitest": "^4.1.4"
   }

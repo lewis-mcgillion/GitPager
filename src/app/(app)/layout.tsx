@@ -1,23 +1,61 @@
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/session";
-import { db } from "@/lib/db";
-import { AppShell } from "@/components/AppShell";
+"use client";
 
-// Auth guard for every page in the (app) route group. Unauthenticated visitors
-// are redirected to the sign-in screen.
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await getSession();
-  if (!session) {
-    redirect("/signin");
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { isAuthenticated, getStoredUser, setStoredUser, logout, type PdUserRef } from "@/lib/pdAuth";
+import { getCurrentUser } from "@/lib/pdApi";
+import { AppShell } from "@/components/AppShell";
+import { Loading } from "@/components/ui";
+
+// Client-side auth guard for the whole authenticated app. GitPager is a static
+// export with no server, so route protection happens here in the browser:
+// unauthenticated visitors are redirected to /signin/. When authenticated but we
+// don't yet have the user's profile cached, we fetch it once from PagerDuty.
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+  const [user, setUser] = useState<PdUserRef | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function init() {
+      if (!isAuthenticated()) {
+        router.replace("/signin/");
+        return;
+      }
+      const cached = getStoredUser();
+      if (cached) {
+        if (active) {
+          setUser(cached);
+          setReady(true);
+        }
+        return;
+      }
+      try {
+        const pu = await getCurrentUser();
+        if (!active) return;
+        const mapped: PdUserRef = { id: pu.id, name: pu.name, email: pu.email, avatarUrl: pu.avatar_url };
+        setStoredUser(mapped);
+        setUser(mapped);
+        setReady(true);
+      } catch {
+        logout();
+        router.replace("/signin/");
+      }
+    }
+    init();
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  if (!ready) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Loading label="Loading GitPager…" />
+      </div>
+    );
   }
 
-  const notificationCount = await db.notification.count({
-    where: { userId: session.id, read: false },
-  });
-
-  return (
-    <AppShell user={session} notificationCount={notificationCount}>
-      {children}
-    </AppShell>
-  );
+  return <AppShell user={user}>{children}</AppShell>;
 }
