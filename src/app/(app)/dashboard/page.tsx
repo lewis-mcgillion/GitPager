@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useAsync } from "@/lib/useAsync";
 import { listOnCalls, listIncidents, type PdOnCall, type PdIncident } from "@/lib/pdApi";
+import { getStoredUser } from "@/lib/pdAuth";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardRow, UserInline, EmptyState, Loading, ErrorState, CardLink } from "@/components/ui";
 import { IncidentStatusLabel, UrgencyLabel } from "@/components/StatusLabel";
@@ -23,8 +24,11 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 export default function DashboardPage() {
   const { data, loading, error, reload } = useAsync<DashboardData>(async () => {
+    const me = getStoredUser();
     const [oncalls, incidents] = await Promise.all([
-      listOnCalls(),
+      // Only the current user's on-call entries — not every on-call in the
+      // account. This is the difference between one request and hundreds.
+      me ? listOnCalls({ "user_ids[]": [me.id] }) : Promise.resolve([]),
       listIncidents({ "statuses[]": ["triggered", "acknowledged"] }),
     ]);
     return { oncalls, incidents };
@@ -45,7 +49,7 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" description="Who's on call right now, and what's on fire." />
+      <PageHeader title="Dashboard" description="Your on-call status and what's on fire." />
 
       {loading ? (
         <Loading />
@@ -53,13 +57,13 @@ export default function DashboardPage() {
         <ErrorState message={error} onRetry={reload} />
       ) : (
         <>
-          <SectionTitle>On call now</SectionTitle>
+          <SectionTitle>You&apos;re on call</SectionTitle>
           {primaryOnCall.length === 0 ? (
             <Card>
               <EmptyState
                 icon={<CalendarIcon size={24} />}
-                title="Nobody is on call"
-                description="No active on-call entries were returned for your account."
+                title="You're not on call right now"
+                description="None of your schedules have you on call at the moment."
               />
             </Card>
           ) : (

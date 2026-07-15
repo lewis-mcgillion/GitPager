@@ -56,11 +56,21 @@ export async function pdFetch<T>(path: string, opts: FetchOptions = {}): Promise
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   if (opts.from) headers["From"] = opts.from;
 
-  const res = await fetch(`${getApiBase()}${path}${buildQuery(opts.query)}`, {
-    method: opts.method ?? "GET",
-    headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-  });
+  const url = `${getApiBase()}${path}${buildQuery(opts.query)}`;
+  let res: Response;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(url, {
+      method: opts.method ?? "GET",
+      headers,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    });
+    // PagerDuty rate-limits with 429 + Retry-After. Back off briefly and retry
+    // rather than surfacing a hard error to the user.
+    if (res.status !== 429 || attempt >= 3) break;
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const delayMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 500 * 2 ** attempt;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
 
   if (res.status === 401) {
     logout();
@@ -80,6 +90,9 @@ export async function pdFetch<T>(path: string, opts: FetchOptions = {}): Promise
       message =
         (message ? `${message} — ` : "") +
         "This token can't perform that action (403). Personal API tokens act with your PagerDuty permissions.";
+    }
+    if (res.status === 429) {
+      message = "PagerDuty is rate-limiting requests (429). Please wait a moment and try again.";
     }
     throw new PdApiError(res.status, message || `Request failed (${res.status})`);
   }
@@ -282,6 +295,23 @@ export function listOnCalls(query: Query = {}): Promise<PdOnCall[]> {
 
 export function listSchedules(): Promise<PdSchedule[]> {
   return pdList<PdSchedule>("/schedules", "schedules");
+}
+
+/** The schedules a user actually participates in, derived from their on-call
+ *  entries over the next ~90 days. This scopes the query to just that user
+ *  instead of paging through every schedule/on-call in the account. */
+export async function listMySchedules(userId: string): Promise<PdRef[]> {
+  const now = new Date();
+  const until = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+  const oncalls = await listOnCalls({
+    "user_ids[]": [userId],
+    "include[]": [],
+    since: now.toISOString(),
+    until: until.toISOString(),
+  });
+  const byId = new Map<string, PdRef>();
+  for (const o of oncalls) if (o.schedule?.id) byId.set(o.schedule.id, o.schedule);
+  return [...byId.values()].sort((a, b) => (a.summary ?? "").localeCompare(b.summary ?? ""));
 }
 
 export async function getSchedule(id: string, since: string, until: string): Promise<PdSchedule> {

@@ -1,18 +1,22 @@
 "use client";
 
 import { useAsync } from "@/lib/useAsync";
-import { listSchedules, type PdSchedule } from "@/lib/pdApi";
+import { listMySchedules, type PdRef } from "@/lib/pdApi";
+import { getStoredUser } from "@/lib/pdAuth";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardRow, EmptyState, Loading, ErrorState, CardLink } from "@/components/ui";
 import { Text } from "@primer/react";
 import { CalendarIcon } from "@primer/octicons-react";
 
 export default function SchedulesPage() {
-  const { data, loading, error, reload } = useAsync<PdSchedule[]>(() => listSchedules(), []);
+  const { data, loading, error, reload } = useAsync<PdRef[]>(() => {
+    const me = getStoredUser();
+    return me ? listMySchedules(me.id) : Promise.resolve([]);
+  }, []);
 
   return (
     <div>
-      <PageHeader title="Schedules" description="On-call rotations across your teams." />
+      <PageHeader title="Schedules" description="The on-call rotations you're part of." />
 
       {loading ? (
         <Loading />
@@ -23,7 +27,7 @@ export default function SchedulesPage() {
           <EmptyState
             icon={<CalendarIcon size={24} />}
             title="No schedules"
-            description="No on-call schedules were found for your account."
+            description="You're not on any on-call schedules in the next 90 days."
           />
         </Card>
       ) : (
@@ -35,14 +39,8 @@ export default function SchedulesPage() {
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <CardLink href={`/schedules/detail/?id=${s.id}`}>
-                  <Text style={{ fontWeight: 500 }}>{s.name}</Text>
+                  <Text style={{ fontWeight: 500 }}>{s.summary}</Text>
                 </CardLink>
-                {s.description ? (
-                  <div style={{ fontSize: 12, color: "var(--fgColor-muted, #656d76)" }}>{s.description}</div>
-                ) : null}
-              </div>
-              <div style={{ flexShrink: 0, fontSize: 12, color: "var(--fgColor-muted, #656d76)" }}>
-                {s.time_zone ?? ""}
               </div>
             </CardRow>
           ))}
