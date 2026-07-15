@@ -8,9 +8,19 @@ import {
   logout,
   getStoredUser,
   setStoredUser,
+  apiBaseFromIdToken,
+  getApiBase,
+  setApiBase,
 } from "@/lib/pdAuth";
 
 const TOKEN_KEY = "gitpager.pd.auth";
+
+/** Build an unsigned JWT with the given payload (only the payload is read). */
+function fakeJwt(payload: Record<string, unknown>): string {
+  const b64 = (o: unknown) =>
+    Buffer.from(JSON.stringify(o)).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `${b64({ alg: "none" })}.${b64(payload)}.`;
+}
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -104,5 +114,41 @@ describe("user + logout", () => {
     expect(getStoredUser()).toBeNull();
     expect(authHeader()).toBeNull();
     expect(isAuthenticated()).toBe(false);
+  });
+});
+
+describe("apiBaseFromIdToken (region detection)", () => {
+  it("picks the US base from a UnitedStates aud claim", () => {
+    const jwt = fakeJwt({ aud: ["https://api.pagerduty.com", "client-123"], region: "UnitedStates" });
+    expect(apiBaseFromIdToken(jwt)).toBe("https://api.pagerduty.com");
+  });
+
+  it("picks the EU base from an aud string", () => {
+    const jwt = fakeJwt({ aud: "https://api.eu.pagerduty.com" });
+    expect(apiBaseFromIdToken(jwt)).toBe("https://api.eu.pagerduty.com");
+  });
+
+  it("returns null for a missing/garbage token or non-PagerDuty aud", () => {
+    expect(apiBaseFromIdToken(undefined)).toBeNull();
+    expect(apiBaseFromIdToken("not-a-jwt")).toBeNull();
+    expect(apiBaseFromIdToken(fakeJwt({ aud: "https://evil.example.com" }))).toBeNull();
+  });
+});
+
+describe("getApiBase / setApiBase", () => {
+  it("falls back to the build-time default when no session base is stored", () => {
+    signInWithToken("tok");
+    expect(getApiBase()).toMatch(/^https:\/\/api(\.eu)?\.pagerduty\.com$/);
+  });
+
+  it("returns the stored per-session base once detected", () => {
+    signInWithToken("tok");
+    setApiBase("https://api.pagerduty.com");
+    expect(getApiBase()).toBe("https://api.pagerduty.com");
+  });
+
+  it("setApiBase is a no-op when not signed in", () => {
+    setApiBase("https://api.pagerduty.com");
+    expect(getApiBase()).toMatch(/^https:\/\/api(\.eu)?\.pagerduty\.com$/);
   });
 });

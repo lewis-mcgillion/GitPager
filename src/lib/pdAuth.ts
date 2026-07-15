@@ -15,6 +15,7 @@ import {
   PD_TOKEN_URL,
   PD_CLIENT_ID,
   PD_SCOPES,
+  PD_API_BASE,
   redirectUri,
 } from "./pdConfig";
 
@@ -30,6 +31,9 @@ export interface StoredAuth {
   refreshToken?: string | null;
   /** Epoch milliseconds when the access token expires (bearer only). */
   expiresAt?: number | null;
+  /** REST API base for this session (region-aware). Derived from the OAuth
+   *  token's audience, or probed for REST tokens. Falls back to PD_API_BASE. */
+  apiBase?: string | null;
 }
 
 export interface PdUserRef {
@@ -80,6 +84,40 @@ export function buildAuthorizeUrl(params: {
 }
 
 // ---------------------------------------------------------------------------
+// Region detection
+// ---------------------------------------------------------------------------
+
+/** Decode a JWT payload (no signature verification — used only to read the
+ *  non-secret `aud` claim so we can pick the correct regional REST API base). */
+function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
+  try {
+    const part = jwt.split(".")[1];
+    if (!part) return null;
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(b64);
+    let json = "";
+    for (let i = 0; i < bin.length; i++) json += "%" + bin.charCodeAt(i).toString(16).padStart(2, "0");
+    return JSON.parse(decodeURIComponent(json));
+  } catch {
+    return null;
+  }
+}
+
+/** PagerDuty encodes the account's REST API base (e.g. https://api.pagerduty.com
+ *  or https://api.eu.pagerduty.com) in the id_token `aud`. Extract it so the app
+ *  talks to the right region regardless of the build-time default. */
+export function apiBaseFromIdToken(idToken?: string): string | null {
+  if (!idToken) return null;
+  const claims = decodeJwtPayload(idToken);
+  const aud = claims?.["aud"];
+  const values = Array.isArray(aud) ? aud : typeof aud === "string" ? [aud] : [];
+  for (const v of values) {
+    if (typeof v === "string" && /^https:\/\/api(\.[a-z0-9-]+)?\.pagerduty\.com$/.test(v)) return v;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Token storage
 // ---------------------------------------------------------------------------
 
@@ -122,6 +160,19 @@ export function isAuthenticated(): boolean {
   return Boolean(a.accessToken);
 }
 
+/** REST API base for the current session: the region-aware value captured at
+ *  sign-in, falling back to the build-time default. */
+export function getApiBase(): string {
+  return getStoredAuth()?.apiBase || PD_API_BASE;
+}
+
+/** Persist the resolved REST API base onto the stored auth (region detection). */
+export function setApiBase(base: string) {
+  const a = getStoredAuth();
+  if (!a) return;
+  setStoredAuth({ ...a, apiBase: base });
+}
+
 /** Authorization header value for API requests, or null when unauthenticated. */
 export function authHeader(): string | null {
   const a = getStoredAuth();
@@ -159,6 +210,7 @@ interface TokenResponse {
   token_type?: string;
   expires_in?: number;
   scope?: string;
+  id_token?: string;
 }
 
 /** Exchange the authorization code for tokens (no client secret — PKCE). */
@@ -202,6 +254,7 @@ export async function completeLogin(search: string): Promise<{ returnTo: string 
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token ?? null,
     expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
+    apiBase: apiBaseFromIdToken(tokens.id_token),
   });
 
   return { returnTo: pkce.returnTo || "/dashboard/" };

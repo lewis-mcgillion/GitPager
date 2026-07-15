@@ -1,11 +1,14 @@
 // PagerDuty REST API client that runs in the browser. PagerDuty serves
 // permissive CORS, so a static SPA can call it directly using the token from
-// pdAuth. All calls go to the region-specific API base (EU by default).
+// pdAuth. Calls go to the region-specific API base resolved at sign-in
+// (US https://api.pagerduty.com or EU https://api.eu.pagerduty.com).
 
-import { PD_API_BASE } from "./pdConfig";
-import { authHeader, logout } from "./pdAuth";
+import { authHeader, getApiBase, setApiBase, logout } from "./pdAuth";
 
 const PD_ACCEPT = "application/vnd.pagerduty+json;version=2";
+
+/** Candidate REST API bases, tried in order when probing an account's region. */
+export const PD_API_BASES = ["https://api.pagerduty.com", "https://api.eu.pagerduty.com"];
 
 export class PdAuthError extends Error {
   constructor(message = "Not authenticated") {
@@ -53,7 +56,7 @@ export async function pdFetch<T>(path: string, opts: FetchOptions = {}): Promise
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   if (opts.from) headers["From"] = opts.from;
 
-  const res = await fetch(`${PD_API_BASE}${path}${buildQuery(opts.query)}`, {
+  const res = await fetch(`${getApiBase()}${path}${buildQuery(opts.query)}`, {
     method: opts.method ?? "GET",
     headers,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
@@ -73,9 +76,33 @@ export async function pdFetch<T>(path: string, opts: FetchOptions = {}): Promise
     } catch {
       /* keep raw text */
     }
+    if (res.status === 403) {
+      message =
+        (message ? `${message} — ` : "") +
+        "This token can't perform that action (403). Personal API tokens act with your PagerDuty permissions.";
+    }
     throw new PdApiError(res.status, message || `Request failed (${res.status})`);
   }
   return (text ? JSON.parse(text) : undefined) as T;
+}
+
+/** Probe the candidate regions with the current token and remember the one that
+ *  responds (anything other than 401 = right region). Lets a pasted REST token
+ *  work whether the account is US or EU without the user choosing a region. */
+export async function detectAndStoreRegion(): Promise<void> {
+  const auth = authHeader();
+  if (!auth) return;
+  for (const base of PD_API_BASES) {
+    try {
+      const res = await fetch(`${base}/abilities`, { headers: { Accept: PD_ACCEPT, Authorization: auth } });
+      if (res.status !== 401) {
+        setApiBase(base);
+        return;
+      }
+    } catch {
+      /* network error — try the next base */
+    }
+  }
 }
 
 /** Fetch every page of a list endpoint, following PagerDuty's offset pagination. */

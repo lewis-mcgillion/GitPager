@@ -7,8 +7,9 @@ most — *who's on call now*, the **rotation timeline**, and **one‑click overr
 
 GitPager is a **static single‑page app**. There is **no backend**: it talks to the
 **PagerDuty REST API directly from your browser** (PagerDuty serves permissive CORS),
-authenticating with **OAuth 2.0 Authorization Code + PKCE** (a public client — no
-secret). That's what lets it be hosted for free on **GitHub Pages**.
+authenticating with a **personal PagerDuty API user token** (or, optionally, OAuth 2.0
+PKCE where an account admin has registered a scoped app). That's what lets it be hosted
+for free on **GitHub Pages**. The API region (US / EU) is detected automatically.
 
 > It does not page anyone. It's a better control panel for the on‑call config that
 > already lives in your PagerDuty account.
@@ -27,11 +28,16 @@ secret). That's what lets it be hosted for free on **GitHub Pages**.
 
 ## How authentication works
 
-- **PagerDuty OAuth (PKCE)** — the recommended path. A *Public Client* app has **no
-  secret**, so the whole flow runs safely in the browser. The access token is kept in
-  `localStorage` (the standard SPA trade‑off for an internal tool with no server).
-- **REST API token** — a fallback for quick local use. Paste a PagerDuty user/general
-  access token on the sign‑in screen. It's stored only in your browser.
+- **Personal API user token** — the recommended path, and it needs **no admin**. In
+  PagerDuty go to your avatar → **My Profile → User Settings → Create API User Token**,
+  then paste it on the GitPager sign‑in screen. The token acts with **your own
+  permissions** and is stored only in your browser's `localStorage`. (Personal tokens
+  require the account to have **Advanced Permissions** enabled.)
+- **PagerDuty OAuth (PKCE)** — optional. A *scoped* Public Client app has no secret, so
+  the flow runs safely in the browser, but registering one and granting it API scopes
+  requires an **account admin**. When a client id is configured, a secondary "Sign in
+  with PagerDuty" button appears. (Classic User OAuth is a confidential flow — it needs a
+  client secret and a server — so it is **not** used by this static app.)
 
 On a `401` the session is cleared and you're returned to sign‑in. There's no refresh
 flow in v1 — you simply sign in again.
@@ -44,12 +50,17 @@ cp .env.example .env.local     # then edit .env.local (see below)
 npm run dev                    # http://localhost:3000
 ```
 
-You can sign in immediately using a **REST API token** (no setup). To use OAuth
-locally, create a PKCE app (below) and set `NEXT_PUBLIC_PAGERDUTY_CLIENT_ID`.
+You can sign in immediately using a **personal API user token** (no setup, no admin —
+see "How authentication works" above). OAuth is optional; to enable it locally, create a
+scoped PKCE app (below) and set `NEXT_PUBLIC_PAGERDUTY_CLIENT_ID`.
 
-## Create the PagerDuty PKCE app (one‑time)
+## (Optional) Create the PagerDuty PKCE app
 
-OAuth sign‑in needs a **Public Client** app registered in *your* PagerDuty account:
+> Only needed if you want the "Sign in with PagerDuty" OAuth button. It requires an
+> **account admin** to register the app and grant scopes. If you're not an admin, use a
+> personal API user token instead — everything works the same.
+
+OAuth sign‑in needs a **scoped Public Client** app registered in your PagerDuty account:
 
 1. PagerDuty → **Integrations → App Registration → New App**.
 2. Name it "GitPager", choose **OAuth 2.0** as the functionality, then **Public Client**
@@ -69,7 +80,7 @@ All build‑time config is **public** (`NEXT_PUBLIC_*`). See `.env.example`.
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `NEXT_PUBLIC_PAGERDUTY_CLIENT_ID` | Public Client (PKCE) client id. Blank hides OAuth and shows token sign‑in. | `""` |
-| `NEXT_PUBLIC_PAGERDUTY_REGION` | `eu` (`api.eu.pagerduty.com`) or `us` (`api.pagerduty.com`). | `eu` |
+| `NEXT_PUBLIC_PAGERDUTY_REGION` | Fallback region only — `us` or `eu`. The region is auto‑detected per session, so this rarely matters. | `eu` |
 | `NEXT_PUBLIC_BASE_PATH` | Path the app is served under, e.g. `/GitPager` on Pages. | `""` |
 | `NEXT_PUBLIC_PAGERDUTY_SCOPES` | Space‑delimited OAuth scopes (subset of the app's grants). | see `.env.example` |
 

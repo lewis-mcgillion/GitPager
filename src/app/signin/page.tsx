@@ -5,15 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button, TextInput, Text, Heading, Flash } from "@primer/react";
 import { MarkGithubIcon, KeyIcon } from "@primer/octicons-react";
 import { beginLogin, signInWithToken, setStoredUser, logout, type PdUserRef } from "@/lib/pdAuth";
-import { getCurrentUser } from "@/lib/pdApi";
-import { isOAuthConfigured, PD_REGION } from "@/lib/pdConfig";
+import { getCurrentUser, detectAndStoreRegion } from "@/lib/pdApi";
+import { isOAuthConfigured } from "@/lib/pdConfig";
 
 const border = "1px solid var(--borderColor-default, #d0d7de)";
 
 export default function SignInPage() {
   const router = useRouter();
-  const configured = isOAuthConfigured();
-  const [showToken, setShowToken] = useState(!configured);
+  const oauthAvailable = isOAuthConfigured();
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +35,7 @@ export default function SignInPage() {
     setBusy(true);
     signInWithToken(token);
     try {
+      await detectAndStoreRegion();
       const pu = await getCurrentUser();
       const mapped: PdUserRef = { id: pu.id, name: pu.name, email: pu.email, avatarUrl: pu.avatar_url };
       setStoredUser(mapped);
@@ -79,54 +79,51 @@ export default function SignInPage() {
             </Flash>
           ) : null}
 
-          {configured ? (
-            <Button variant="primary" block size="large" onClick={onOAuth} disabled={busy}>
-              Sign in with PagerDuty
+          <form onSubmit={onToken}>
+            <label htmlFor="pd-token" style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+              PagerDuty API user token
+            </label>
+            <TextInput
+              id="pd-token"
+              block
+              type="password"
+              monospace
+              placeholder="u+XXXXXXXXXXXXXXXXXXXX"
+              leadingVisual={KeyIcon}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              autoComplete="off"
+            />
+            <Text
+              style={{ display: "block", fontSize: 12, color: "var(--fgColor-muted, #656d76)", margin: "8px 0 14px" }}
+            >
+              In PagerDuty go to your avatar →{" "}
+              <strong>My Profile → User Settings → Create API User Token</strong>. The token acts with your own
+              permissions and is stored only in this browser — it never leaves your device.
+            </Text>
+            <Button type="submit" variant="primary" block size="large" disabled={busy || !token.trim()}>
+              {busy ? "Signing in…" : "Sign in"}
             </Button>
-          ) : (
-            <Flash style={{ marginBottom: 16 }}>
-              OAuth isn&apos;t configured for this deployment. Set{" "}
-              <code>NEXT_PUBLIC_PAGERDUTY_CLIENT_ID</code> to enable single sign-on, or use a REST API token
-              below.
-            </Flash>
-          )}
+          </form>
 
-          {configured ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "16px 0" }}>
-              <div style={{ flex: 1, height: 1, background: "var(--borderColor-default, #d0d7de)" }} />
-              <Text style={{ fontSize: 12, color: "var(--fgColor-muted, #656d76)" }}>or</Text>
-              <div style={{ flex: 1, height: 1, background: "var(--borderColor-default, #d0d7de)" }} />
-            </div>
-          ) : null}
-
-          {showToken ? (
-            <form onSubmit={onToken}>
-              <label htmlFor="pd-token" style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                PagerDuty REST API token
-              </label>
-              <TextInput
-                id="pd-token"
-                block
-                type="password"
-                monospace
-                placeholder="u+XXXXXXXXXXXXXXXXXXXX"
-                leadingVisual={KeyIcon}
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                autoComplete="off"
-              />
-              <Text style={{ display: "block", fontSize: 12, color: "var(--fgColor-muted, #656d76)", margin: "6px 0 12px" }}>
-                A user or general-access token for the {PD_REGION.toUpperCase()} region. Stored only in your browser.
-              </Text>
-              <Button type="submit" block disabled={busy || !token.trim()}>
-                Continue with token
+          {oauthAvailable ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "16px 0" }}>
+                <div style={{ flex: 1, height: 1, background: "var(--borderColor-default, #d0d7de)" }} />
+                <Text style={{ fontSize: 12, color: "var(--fgColor-muted, #656d76)" }}>or</Text>
+                <div style={{ flex: 1, height: 1, background: "var(--borderColor-default, #d0d7de)" }} />
+              </div>
+              <Button variant="invisible" block leadingVisual={MarkGithubIcon} onClick={onOAuth} disabled={busy}>
+                Sign in with PagerDuty (OAuth)
               </Button>
-            </form>
-          ) : (
-            <Button variant="invisible" block leadingVisual={KeyIcon} onClick={() => setShowToken(true)}>
-              Use a REST API token instead
-            </Button>
-          )}
+              <Text
+                as="p"
+                style={{ textAlign: "center", fontSize: 11, color: "var(--fgColor-muted, #656d76)", margin: "6px 0 0" }}
+              >
+                Requires an admin-configured scoped OAuth app.
+              </Text>
+            </>
+          ) : null}
         </div>
 
         <Text
