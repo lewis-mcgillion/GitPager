@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signInWithToken } from "@/lib/pdAuth";
-import { pdList, createOverride, deleteOverride, manageIncident, listIncidents } from "@/lib/pdApi";
+import { pdList, createOverride, deleteOverride, manageIncident, listIncidents, searchEscalationPolicies, searchServices, pdFetchPage, listIncidentsPage } from "@/lib/pdApi";
 
 interface MockCall {
   url: string;
@@ -118,5 +118,74 @@ describe("auth error handling", () => {
     await expect(listIncidents()).rejects.toThrow();
     // token should have been cleared by logout()
     expect(window.localStorage.getItem("gitpager.pd.auth")).toBeNull();
+  });
+});
+
+describe("searchEscalationPolicies scoping", () => {
+  it("scopes to the signed-in user when there is no query", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ escalation_policies: [], more: false }));
+    await searchEscalationPolicies({ userIds: ["PME"], offset: 0 });
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("user_ids%5B%5D=PME");
+    expect(url).not.toContain("query=");
+    expect(url).toContain("limit=25");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("searches by name account-wide (dropping the user scope) when a query is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ escalation_policies: [], more: false }));
+    await searchEscalationPolicies({ query: "db", userIds: ["PME"], offset: 25 });
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("query=db");
+    expect(url).not.toContain("user_ids");
+    expect(url).toContain("offset=25");
+  });
+});
+
+describe("searchServices scoping", () => {
+  it("scopes to the user's teams when there is no query", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ services: [], more: false }));
+    await searchServices({ teamIds: ["T1", "T2"], offset: 0 });
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("team_ids%5B%5D=T1");
+    expect(url).toContain("team_ids%5B%5D=T2");
+    expect(url).not.toContain("query=");
+  });
+
+  it("searches all services by name when a query is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ services: [], more: false }));
+    await searchServices({ query: "api", teamIds: ["T1"], offset: 0 });
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("query=api");
+    expect(url).not.toContain("team_ids");
+  });
+});
+
+describe("pdFetchPage", () => {
+  it("returns a single page (more/offset/limit) without crawling", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ teams: [{ id: "T1" }], more: true }));
+    const page = await pdFetchPage<{ id: string }>("/teams", "teams", { query: "x" }, 25, 25);
+    expect(page.items).toEqual([{ id: "T1" }]);
+    expect(page.more).toBe(true);
+    expect(page.offset).toBe(25);
+    expect(page.limit).toBe(25);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("offset=25");
+    expect(url).toContain("limit=25");
+  });
+});
+
+describe("listIncidentsPage", () => {
+  it("requests one page sorted newest first with status and service filters", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ incidents: [{ id: "I1" }], more: false }));
+    const page = await listIncidentsPage({ statuses: ["resolved"], serviceIds: ["S1"], limit: 10 });
+    expect(page.items).toEqual([{ id: "I1" }]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("sort_by=created_at%3Adesc");
+    expect(url).toContain("statuses%5B%5D=resolved");
+    expect(url).toContain("service_ids%5B%5D=S1");
+    expect(url).toContain("limit=10");
   });
 });

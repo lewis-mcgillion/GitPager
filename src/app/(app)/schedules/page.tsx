@@ -1,51 +1,47 @@
 "use client";
 
-import { useAsync } from "@/lib/useAsync";
-import { listMySchedules, type PdRef } from "@/lib/pdApi";
+import { listMySchedules, searchSchedules, type PdPage } from "@/lib/pdApi";
 import { getStoredUser } from "@/lib/pdAuth";
-import { PageHeader } from "@/components/PageHeader";
-import { Card, CardRow, EmptyState, Loading, ErrorState, CardLink } from "@/components/ui";
-import { Text } from "@primer/react";
+import { ResourceBrowser, type BrowseRow } from "@/components/ResourceBrowser";
 import { CalendarIcon } from "@primer/octicons-react";
 
 export default function SchedulesPage() {
-  const { data, loading, error, reload } = useAsync<PdRef[]>(() => {
-    const me = getStoredUser();
-    return me ? listMySchedules(me.id) : Promise.resolve([]);
-  }, []);
+  async function fetchPage(query: string, offset: number): Promise<PdPage<BrowseRow>> {
+    // Default view: the schedules you're actually on over the next 90 days
+    // (derived from your on-call entries). Typing searches all schedules.
+    if (!query) {
+      const me = getStoredUser();
+      const mine = me ? await listMySchedules(me.id) : [];
+      return {
+        items: mine.map((s) => ({ id: s.id, title: s.summary ?? "Schedule", href: `/schedules/detail/?id=${s.id}` })),
+        more: false,
+        offset: 0,
+        limit: mine.length,
+      };
+    }
+    const page = await searchSchedules({ query, offset });
+    return {
+      ...page,
+      items: page.items.map((s) => ({
+        id: s.id,
+        title: s.name,
+        subtitle: s.description,
+        href: `/schedules/detail/?id=${s.id}`,
+      })),
+    };
+  }
 
   return (
-    <div>
-      <PageHeader title="Schedules" description="The on-call rotations you're part of." />
-
-      {loading ? (
-        <Loading />
-      ) : error ? (
-        <ErrorState message={error} onRetry={reload} />
-      ) : (data?.length ?? 0) === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<CalendarIcon size={24} />}
-            title="No schedules"
-            description="You're not on any on-call schedules in the next 90 days."
-          />
-        </Card>
-      ) : (
-        <Card>
-          {data!.map((s, i) => (
-            <CardRow key={s.id} style={i === 0 ? { borderTop: "none" } : undefined}>
-              <span style={{ color: "var(--fgColor-muted, #656d76)", flexShrink: 0 }}>
-                <CalendarIcon size={16} />
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <CardLink href={`/schedules/detail/?id=${s.id}`}>
-                  <Text style={{ fontWeight: 500 }}>{s.summary}</Text>
-                </CardLink>
-              </div>
-            </CardRow>
-          ))}
-        </Card>
-      )}
-    </div>
+    <ResourceBrowser
+      title="Schedules"
+      description="On-call rotations."
+      placeholder="Search all schedules by name…"
+      icon={<CalendarIcon size={16} />}
+      emptyIcon={<CalendarIcon size={24} />}
+      fetchPage={fetchPage}
+      emptyTitle="No schedules"
+      emptyDescription="You're not on any on-call schedules in the next 90 days. Search to find any schedule."
+      defaultHint="Showing schedules you're on in the next 90 days. Search to find any schedule."
+    />
   );
 }

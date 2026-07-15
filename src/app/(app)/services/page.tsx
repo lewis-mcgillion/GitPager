@@ -1,48 +1,39 @@
 "use client";
 
-import { useAsync } from "@/lib/useAsync";
-import { listServices, type PdService } from "@/lib/pdApi";
-import { PageHeader } from "@/components/PageHeader";
-import { Card, CardRow, EmptyState, Loading, ErrorState, CardLink } from "@/components/ui";
+import { searchServices, type PdPage } from "@/lib/pdApi";
+import { getStoredUser } from "@/lib/pdAuth";
+import { ResourceBrowser, type BrowseRow } from "@/components/ResourceBrowser";
 import { ServiceStatusLabel } from "@/components/StatusLabel";
-import { Text } from "@primer/react";
 import { ServerIcon } from "@primer/octicons-react";
 
 export default function ServicesPage() {
-  const { data, loading, error, reload } = useAsync<PdService[]>(() => listServices(), []);
+  async function fetchPage(query: string, offset: number): Promise<PdPage<BrowseRow>> {
+    // Default view: services owned by your teams. Typing searches all services.
+    const teamIds = getStoredUser()?.teams?.map((t) => t.id) ?? [];
+    const page = await searchServices({ query, teamIds, offset });
+    return {
+      ...page,
+      items: page.items.map((s) => ({
+        id: s.id,
+        title: s.name,
+        subtitle: s.description,
+        meta: s.status ? <ServiceStatusLabel status={s.status} /> : null,
+        href: `/services/detail/?id=${s.id}`,
+      })),
+    };
+  }
 
   return (
-    <div>
-      <PageHeader title="Services" description="The systems you page for." />
-
-      {loading ? (
-        <Loading />
-      ) : error ? (
-        <ErrorState message={error} onRetry={reload} />
-      ) : (data?.length ?? 0) === 0 ? (
-        <Card>
-          <EmptyState icon={<ServerIcon size={24} />} title="No services" />
-        </Card>
-      ) : (
-        <Card>
-          {data!.map((s, i) => (
-            <CardRow key={s.id} style={i === 0 ? { borderTop: "none" } : undefined}>
-              <span style={{ color: "var(--fgColor-muted, #656d76)", flexShrink: 0 }}>
-                <ServerIcon size={16} />
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <CardLink href={`/services/detail/?id=${s.id}`}>
-                  <Text style={{ fontWeight: 500 }}>{s.name}</Text>
-                </CardLink>
-                {s.description ? (
-                  <div style={{ fontSize: 12, color: "var(--fgColor-muted, #656d76)" }}>{s.description}</div>
-                ) : null}
-              </div>
-              {s.status ? <ServiceStatusLabel status={s.status} /> : null}
-            </CardRow>
-          ))}
-        </Card>
-      )}
-    </div>
+    <ResourceBrowser
+      title="Services"
+      description="The systems you page for."
+      placeholder="Search all services by name…"
+      icon={<ServerIcon size={16} />}
+      emptyIcon={<ServerIcon size={24} />}
+      fetchPage={fetchPage}
+      emptyTitle="No services"
+      emptyDescription="No services owned by your teams. Search to find any service."
+      defaultHint="Showing services owned by your teams. Search to find any service."
+    />
   );
 }

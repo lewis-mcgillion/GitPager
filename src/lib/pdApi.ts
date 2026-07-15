@@ -135,6 +135,28 @@ export async function pdList<T>(path: string, key: string, query: Query = {}): P
   return out;
 }
 
+/** A single page of results from a PagerDuty list endpoint. */
+export interface PdPage<T> {
+  items: T[];
+  more: boolean;
+  offset: number;
+  limit: number;
+}
+
+/** Fetch one page of a list endpoint (no auto-pagination). Powers the
+ *  search-first browse UI, which loads a page at a time on demand instead of
+ *  crawling every page of an account-wide collection. */
+export async function pdFetchPage<T>(
+  path: string,
+  key: string,
+  query: Query,
+  offset: number,
+  limit = 25,
+): Promise<PdPage<T>> {
+  const data = await pdFetch<Record<string, unknown>>(path, { query: { ...query, limit, offset } });
+  return { items: (data[key] as T[]) ?? [], more: Boolean(data.more), offset, limit };
+}
+
 // ---------------------------------------------------------------------------
 // Types (only the fields GitPager uses)
 // ---------------------------------------------------------------------------
@@ -282,7 +304,7 @@ export interface PdTeam {
 // ---------------------------------------------------------------------------
 
 export async function getCurrentUser(): Promise<PdUser> {
-  const data = await pdFetch<{ user: PdUser }>("/users/me");
+  const data = await pdFetch<{ user: PdUser }>("/users/me", { query: { "include[]": ["teams"] } });
   return data.user;
 }
 
@@ -408,4 +430,77 @@ export function listTeams(): Promise<PdTeam[]> {
 export async function getTeam(id: string): Promise<PdTeam> {
   const data = await pdFetch<{ team: PdTeam }>(`/teams/${id}`);
   return data.team;
+}
+
+// ---------------------------------------------------------------------------
+// Paged, query-first browse helpers
+//
+// Each returns a single page. With no `query`, results are scoped to the
+// signed-in user (their teams) so the default view prioritises what they
+// belong to. With a `query`, we search that endpoint account-wide by name.
+// ---------------------------------------------------------------------------
+
+export function searchEscalationPolicies(p: {
+  query?: string;
+  userIds?: string[];
+  offset?: number;
+  limit?: number;
+}): Promise<PdPage<PdEscalationPolicy>> {
+  const q: Query = {};
+  if (p.query) q.query = p.query;
+  else if (p.userIds?.length) q["user_ids[]"] = p.userIds;
+  return pdFetchPage<PdEscalationPolicy>("/escalation_policies", "escalation_policies", q, p.offset ?? 0, p.limit ?? 25);
+}
+
+export function searchSchedules(p: { query?: string; offset?: number; limit?: number }): Promise<PdPage<PdSchedule>> {
+  const q: Query = {};
+  if (p.query) q.query = p.query;
+  return pdFetchPage<PdSchedule>("/schedules", "schedules", q, p.offset ?? 0, p.limit ?? 25);
+}
+
+export function searchServices(p: {
+  query?: string;
+  teamIds?: string[];
+  offset?: number;
+  limit?: number;
+}): Promise<PdPage<PdService>> {
+  const q: Query = { "include[]": ["escalation_policies", "teams"] };
+  if (p.query) q.query = p.query;
+  else if (p.teamIds?.length) q["team_ids[]"] = p.teamIds;
+  return pdFetchPage<PdService>("/services", "services", q, p.offset ?? 0, p.limit ?? 25);
+}
+
+export function searchTeams(p: { query?: string; offset?: number; limit?: number }): Promise<PdPage<PdTeam>> {
+  const q: Query = {};
+  if (p.query) q.query = p.query;
+  return pdFetchPage<PdTeam>("/teams", "teams", q, p.offset ?? 0, p.limit ?? 25);
+}
+
+export function searchUsers(p: {
+  query?: string;
+  teamIds?: string[];
+  offset?: number;
+  limit?: number;
+}): Promise<PdPage<PdUser>> {
+  const q: Query = { "include[]": ["teams"] };
+  if (p.query) q.query = p.query;
+  else if (p.teamIds?.length) q["team_ids[]"] = p.teamIds;
+  return pdFetchPage<PdUser>("/users", "users", q, p.offset ?? 0, p.limit ?? 25);
+}
+
+/** One page of incidents, newest first. Used by the incidents page instead of
+ *  the account-wide crawl so we fetch a page at a time, sorted created_at desc. */
+export function listIncidentsPage(p: {
+  statuses: string[];
+  serviceIds?: string[];
+  offset?: number;
+  limit?: number;
+}): Promise<PdPage<PdIncident>> {
+  const q: Query = {
+    "include[]": ["assignees", "services"],
+    "statuses[]": p.statuses,
+    sort_by: "created_at:desc",
+  };
+  if (p.serviceIds?.length) q["service_ids[]"] = p.serviceIds;
+  return pdFetchPage<PdIncident>("/incidents", "incidents", q, p.offset ?? 0, p.limit ?? 25);
 }

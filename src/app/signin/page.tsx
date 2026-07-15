@@ -37,7 +37,13 @@ export default function SignInPage() {
     try {
       await detectAndStoreRegion();
       const pu = await getCurrentUser();
-      const mapped: PdUserRef = { id: pu.id, name: pu.name, email: pu.email, avatarUrl: pu.avatar_url };
+      const mapped: PdUserRef = {
+        id: pu.id,
+        name: pu.name,
+        email: pu.email,
+        avatarUrl: pu.avatar_url,
+        teams: pu.teams?.map((t) => ({ id: t.id, name: t.summary ?? "" })),
+      };
       setStoredUser(mapped);
       router.replace("/dashboard/");
     } catch (err) {

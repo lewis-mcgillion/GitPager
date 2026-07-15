@@ -24,7 +24,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         return;
       }
       const cached = getStoredUser();
-      if (cached) {
+      if (cached && cached.teams) {
         if (active) {
           setUser(cached);
           setReady(true);
@@ -34,7 +34,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       try {
         const pu = await getCurrentUser();
         if (!active) return;
-        const mapped: PdUserRef = { id: pu.id, name: pu.name, email: pu.email, avatarUrl: pu.avatar_url };
+        const mapped: PdUserRef = {
+          id: pu.id,
+          name: pu.name,
+          email: pu.email,
+          avatarUrl: pu.avatar_url,
+          teams: pu.teams?.map((t) => ({ id: t.id, name: t.summary ?? "" })),
+        };
         setStoredUser(mapped);
         setUser(mapped);
         setReady(true);

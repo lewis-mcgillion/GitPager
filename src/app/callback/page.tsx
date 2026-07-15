@@ -25,7 +25,13 @@ export default function CallbackPage() {
         const { returnTo } = await completeLogin(window.location.search);
         try {
           const pu = await getCurrentUser();
-          const mapped: PdUserRef = { id: pu.id, name: pu.name, email: pu.email, avatarUrl: pu.avatar_url };
+          const mapped: PdUserRef = {
+            id: pu.id,
+            name: pu.name,
+            email: pu.email,
+            avatarUrl: pu.avatar_url,
+            teams: pu.teams?.map((t) => ({ id: t.id, name: t.summary ?? "" })),
+          };
           setStoredUser(mapped);
         } catch {
           /* profile fetch is best-effort; the app layout will retry */

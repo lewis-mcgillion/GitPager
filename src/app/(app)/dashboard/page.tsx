@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useAsync } from "@/lib/useAsync";
-import { listOnCalls, listIncidents, type PdOnCall, type PdIncident } from "@/lib/pdApi";
+import { listOnCalls, listIncidentsPage, type PdOnCall, type PdIncident } from "@/lib/pdApi";
 import { getStoredUser } from "@/lib/pdAuth";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardRow, UserInline, EmptyState, Loading, ErrorState, CardLink } from "@/components/ui";
@@ -29,7 +29,7 @@ export default function DashboardPage() {
       // Only the current user's on-call entries — not every on-call in the
       // account. This is the difference between one request and hundreds.
       me ? listOnCalls({ "user_ids[]": [me.id] }) : Promise.resolve([]),
-      listIncidents({ "statuses[]": ["triggered", "acknowledged"] }),
+      listIncidentsPage({ "statuses": ["triggered", "acknowledged"], limit: 25 }).then((p) => p.items),
     ]);
     return { oncalls, incidents };
   }, []);

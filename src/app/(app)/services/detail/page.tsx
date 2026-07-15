@@ -2,7 +2,7 @@
 
 import { useAsync } from "@/lib/useAsync";
 import { useQueryId } from "@/lib/useQueryId";
-import { getService, listIncidents, type PdService, type PdIncident } from "@/lib/pdApi";
+import { getService, listIncidentsPage, type PdService, type PdIncident } from "@/lib/pdApi";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardRow, EmptyState, Loading, ErrorState, CardLink } from "@/components/ui";
 import { ServiceStatusLabel, IncidentStatusLabel, UrgencyLabel } from "@/components/StatusLabel";
@@ -35,7 +35,11 @@ function ServiceDetail({ id }: { id: string }) {
   const { data, loading, error, reload } = useAsync<ServiceData>(async () => {
     const [service, incidents] = await Promise.all([
       getService(id),
-      listIncidents({ "service_ids[]": [id], "statuses[]": ["triggered", "acknowledged", "resolved"], limit: 10 }),
+      listIncidentsPage({
+        serviceIds: [id],
+        statuses: ["triggered", "acknowledged", "resolved"],
+        limit: 10,
+      }).then((p) => p.items),
     ]);
     return { service, incidents };
   }, [id]);

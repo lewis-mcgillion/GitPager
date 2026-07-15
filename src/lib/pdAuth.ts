@@ -41,6 +41,8 @@ export interface PdUserRef {
   name: string;
   email: string;
   avatarUrl?: string | null;
+  /** The teams this user belongs to, used to scope/prioritise browse pages. */
+  teams?: { id: string; name: string }[];
 }
 
 // ---------------------------------------------------------------------------
