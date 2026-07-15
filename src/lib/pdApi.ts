@@ -432,6 +432,12 @@ export async function getTeam(id: string): Promise<PdTeam> {
   return data.team;
 }
 
+/** Members of a single team. Scopes the query to the team (`team_ids[]`) so we
+ *  fetch only its members instead of crawling every user in the account. */
+export function listTeamMembers(teamId: string): Promise<PdUser[]> {
+  return pdList<PdUser>("/users", "users", { "team_ids[]": [teamId] });
+}
+
 // ---------------------------------------------------------------------------
 // Paged, query-first browse helpers
 //

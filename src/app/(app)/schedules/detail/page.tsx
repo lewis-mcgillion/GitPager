@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Button, IconButton, Select, TextInput, FormControl, Flash, Text } from "@primer/react";
-import { TrashIcon, LinkExternalIcon, PlusIcon, CalendarIcon } from "@primer/octicons-react";
+import { TrashIcon, LinkExternalIcon, PlusIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
 import { useAsync } from "@/lib/useAsync";
 import { useQueryId } from "@/lib/useQueryId";
 import { getSchedule, createOverride, deleteOverride, type PdSchedule } from "@/lib/pdApi";
@@ -30,13 +30,18 @@ export default function ScheduleDetailPage() {
 }
 
 function ScheduleDetail({ id }: { id: string }) {
+  // How many days the visible window is shifted from today. Earlier/Later page
+  // it by a full window; Today resets to 0.
+  const [offsetDays, setOffsetDays] = useState(0);
+
   const range = useMemo(() => {
     const since = new Date();
     since.setHours(0, 0, 0, 0);
+    since.setDate(since.getDate() + offsetDays);
     const until = new Date(since);
     until.setDate(until.getDate() + WINDOW_DAYS);
     return { since: since.toISOString(), until: until.toISOString(), sinceDate: since, untilDate: until };
-  }, []);
+  }, [offsetDays]);
 
   const { data, loading, error, reload } = useAsync<PdSchedule>(
     () => getSchedule(id, range.since, range.until),
@@ -67,11 +72,19 @@ function ScheduleDetail({ id }: { id: string }) {
   const overrides = data.overrides ?? [];
   const pickableUsers = data.users ?? [];
 
+  const fmtDay = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const lastVisibleDay = new Date(range.untilDate.getTime() - 1);
+  const rangeLabel = `${fmtDay(range.sinceDate)} – ${lastVisibleDay.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })}`;
+
   return (
     <div>
       <PageHeader
         title={data.name}
-        description={data.description || `Rendered on-call for the next ${WINDOW_DAYS} days (UTC).`}
+        description={data.description || `On-call rotation shown ${WINDOW_DAYS} days at a time — use Earlier / Later to move through time.`}
         actions={
           data.html_url ? (
             <a href={data.html_url} target="_blank" rel="noreferrer">
@@ -102,7 +115,34 @@ function ScheduleDetail({ id }: { id: string }) {
         </Card>
       ) : null}
 
-      <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 12px" }}>Timeline</h2>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+          margin: "0 0 12px",
+        }}
+      >
+        <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Timeline</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Button size="small" leadingVisual={ChevronLeftIcon} onClick={() => setOffsetDays((o) => o - WINDOW_DAYS)}>
+            Earlier
+          </Button>
+          <Button size="small" onClick={() => setOffsetDays(0)} disabled={offsetDays === 0}>
+            Today
+          </Button>
+          <Button size="small" trailingVisual={ChevronRightIcon} onClick={() => setOffsetDays((o) => o + WINDOW_DAYS)}>
+            Later
+          </Button>
+        </div>
+      </div>
+      <Text
+        style={{ display: "block", color: "var(--fgColor-muted, #656d76)", fontSize: 12, margin: "0 0 12px" }}
+      >
+        {rangeLabel}
+      </Text>
       <Card padded>
         {segments.length === 0 ? (
           <EmptyState

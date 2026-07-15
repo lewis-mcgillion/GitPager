@@ -2,7 +2,7 @@
 
 import { useAsync } from "@/lib/useAsync";
 import { useQueryId } from "@/lib/useQueryId";
-import { getTeam, listUsers, type PdTeam, type PdUser } from "@/lib/pdApi";
+import { getTeam, listTeamMembers, type PdTeam, type PdUser } from "@/lib/pdApi";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardRow, UserInline, EmptyState, Loading, ErrorState, CardLink } from "@/components/ui";
 import { Button, Text } from "@primer/react";
@@ -22,8 +22,7 @@ export default function TeamDetailPage() {
 
 function TeamDetail({ id }: { id: string }) {
   const { data, loading, error, reload } = useAsync<TeamData>(async () => {
-    const [team, allUsers] = await Promise.all([getTeam(id), listUsers()]);
-    const members = allUsers.filter((u) => (u.teams ?? []).some((t) => t.id === id));
+    const [team, members] = await Promise.all([getTeam(id), listTeamMembers(id)]);
     return { team, members };
   }, [id]);
 
@@ -52,7 +51,7 @@ function TeamDetail({ id }: { id: string }) {
       </h2>
       {members.length === 0 ? (
         <Card>
-          <EmptyState title="No members" description="No users list this team in their membership." />
+          <EmptyState title="No members" description="This team has no members." />
         </Card>
       ) : (
         <Card>

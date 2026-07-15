@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signInWithToken } from "@/lib/pdAuth";
-import { pdList, createOverride, deleteOverride, manageIncident, listIncidents, searchEscalationPolicies, searchServices, pdFetchPage, listIncidentsPage } from "@/lib/pdApi";
+import { pdList, createOverride, deleteOverride, manageIncident, listIncidents, searchEscalationPolicies, searchServices, pdFetchPage, listIncidentsPage, listTeamMembers } from "@/lib/pdApi";
 
 interface MockCall {
   url: string;
@@ -187,5 +187,16 @@ describe("listIncidentsPage", () => {
     expect(url).toContain("statuses%5B%5D=resolved");
     expect(url).toContain("service_ids%5B%5D=S1");
     expect(url).toContain("limit=10");
+  });
+});
+
+describe("listTeamMembers", () => {
+  it("scopes the users query to the given team", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ users: [{ id: "U1" }], more: false }));
+    const members = await listTeamMembers("TEAM1");
+    expect(members).toEqual([{ id: "U1" }]);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("team_ids%5B%5D=TEAM1");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
